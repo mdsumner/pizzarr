@@ -135,37 +135,32 @@ fn dispatch_retrieve(
     array_path: &str,
 ) -> std::result::Result<Robj, PizzarrError> {
     // Macro: retrieve, transpose C→F, widen to f64 for R.
+    // Decode with zarrs, then transpose C->F and convert in one pass into a
+    // freshly allocated R vector (no intermediate vectors, no extra copy).
+    let n: usize = shape.iter().product::<u64>() as usize;
+
     macro_rules! retrieve_as_double {
         ($t:ty) => {{
             let raw: Vec<$t> = retrieve_with_opts(array, subset, opts, store_url, array_path)?;
-            let transposed = transpose::c_to_f_order(&raw, shape);
-            let widened: Vec<f64> = transposed.into_iter().map(|v| v as f64).collect();
-            Ok(widened.into_robj())
+            let mut out = Doubles::new(n);
+            transpose::c_to_f_into(&raw, shape, &mut out, |v| Rfloat::from(v as f64));
+            Ok(out.into())
         }};
     }
 
-    // Macro: retrieve, transpose C→F, widen to i32 for R.
     macro_rules! retrieve_as_integer {
         ($t:ty) => {{
             let raw: Vec<$t> = retrieve_with_opts(array, subset, opts, store_url, array_path)?;
-            let transposed = transpose::c_to_f_order(&raw, shape);
-            let widened: Vec<i32> = transposed.into_iter().map(|v| v as i32).collect();
-            Ok(widened.into_robj())
+            let mut out = Integers::new(n);
+            transpose::c_to_f_into(&raw, shape, &mut out, |v| Rint::from(v as i32));
+            Ok(out.into())
         }};
     }
 
     match family {
-        RTypeFamily::Double => {
-            let data: Vec<f64> = retrieve_with_opts(array, subset, opts, store_url, array_path)?;
-            let data = transpose::c_to_f_order(&data, shape);
-            Ok(data.into_robj())
-        }
+        RTypeFamily::Double => retrieve_as_double!(f64),
         RTypeFamily::Float32AsDouble => retrieve_as_double!(f32),
-        RTypeFamily::Integer => {
-            let data: Vec<i32> = retrieve_with_opts(array, subset, opts, store_url, array_path)?;
-            let data = transpose::c_to_f_order(&data, shape);
-            Ok(data.into_robj())
-        }
+        RTypeFamily::Integer => retrieve_as_integer!(i32),
         RTypeFamily::Int16AsInteger => retrieve_as_integer!(i16),
         RTypeFamily::Int8AsInteger => retrieve_as_integer!(i8),
         RTypeFamily::Uint8AsInteger => retrieve_as_integer!(u8),

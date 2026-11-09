@@ -111,3 +111,17 @@ selection_to_ranges <- function(indexer) {
     }
   })
 }
+
+#' Whether the zarrs path keeps this dtype's R representation
+#'
+#' 64-bit integer arrays are read as `bit64::integer64` by the R path when
+#' bit64 is installed; the zarrs path converts them to double (and cannot
+#' write `integer64` values), so keep them on the R path in that case.
+#'
+#' @param dtype A Dtype object.
+#' @return Logical scalar.
+#' @keywords internal
+zarrs_dtype_ok <- function(dtype) {
+  if (is.null(dtype)) return(TRUE)
+  !(dtype$basic_type %in% c("i", "u") && isTRUE(dtype$num_bytes == 8) && has_bit64())
+}

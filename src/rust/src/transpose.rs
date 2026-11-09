@@ -47,6 +47,70 @@ pub(crate) fn c_to_f_order<T: Copy>(data: &[T], shape: &[u64]) -> Vec<T> {
     transpose_nd_c_to_f(data, shape)
 }
 
+/// Transpose `src` (C-order, `shape`) into `dst` (F-order), converting each
+/// element with `conv`, in one pass and without intermediate vectors.
+///
+/// `dst` is typically the data of a freshly allocated R vector, so the
+/// result lands in R memory directly. Size-1 dimensions are dropped first
+/// (they do not change the layout), so e.g. `[1, ny, nx]` takes the 2D
+/// path. The 2D path is cache-blocked and runs in parallel over blocks of
+/// output columns, which are disjoint contiguous slices of `dst`.
+pub(crate) fn c_to_f_into<S, D, F>(src: &[S], shape: &[u64], dst: &mut [D], conv: F)
+where
+    S: Copy + Sync,
+    D: Send,
+    F: Fn(S) -> D + Sync,
+{
+    use rayon::prelude::*;
+    assert_eq!(src.len(), dst.len());
+    let dims: Vec<usize> = shape.iter().filter(|&&d| d != 1).map(|&d| d as usize).collect();
+    if dims.len() <= 1 {
+        dst.par_iter_mut().zip(src.par_iter()).for_each(|(d, &s)| *d = conv(s));
+        return;
+    }
+    if dims.len() == 2 {
+        let (rows, cols) = (dims[0], dims[1]);
+        // output (F-order) column c of the C-order [rows, cols] input is
+        // dst[c*rows .. (c+1)*rows]; hand each thread BLOCK_SIZE columns
+        dst.par_chunks_mut(BLOCK_SIZE * rows).enumerate().for_each(|(bi, block)| {
+            let c0 = bi * BLOCK_SIZE;
+            let c1 = (c0 + BLOCK_SIZE).min(cols);
+            let mut r0 = 0;
+            while r0 < rows {
+                let r1 = (r0 + BLOCK_SIZE).min(rows);
+                for r in r0..r1 {
+                    let row = &src[r * cols..(r + 1) * cols];
+                    for c in c0..c1 {
+                        block[(c - c0) * rows + r] = conv(row[c]);
+                    }
+                }
+                r0 = r1;
+            }
+        });
+        return;
+    }
+    // nD: iterate in F-order (sequential writes), tracking the C-order index
+    let ndim = dims.len();
+    let mut c_strides = vec![1usize; ndim];
+    for i in (0..ndim - 1).rev() {
+        c_strides[i] = c_strides[i + 1] * dims[i + 1];
+    }
+    let mut coords = vec![0usize; ndim];
+    let mut c_idx = 0usize;
+    for out in dst.iter_mut() {
+        *out = conv(src[c_idx]);
+        for d in 0..ndim {
+            coords[d] += 1;
+            c_idx += c_strides[d];
+            if coords[d] < dims[d] {
+                break;
+            }
+            c_idx -= coords[d] * c_strides[d];
+            coords[d] = 0;
+        }
+    }
+}
+
 /// Transpose a flat vector from F-order to C-order.
 ///
 /// Given `data` laid out in F-order (first index varies fastest) for an
@@ -199,6 +263,26 @@ fn transpose_nd_f_to_c<T: Copy>(data: &[T], shape: &[u64]) -> Vec<T> {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests_into {
+    use super::*;
+    fn check(shape: &[u64]) {
+        let n: u64 = shape.iter().product();
+        let src: Vec<f32> = (0..n).map(|i| i as f32).collect();
+        let want: Vec<f64> = c_to_f_order(&src, shape).into_iter().map(|v| v as f64).collect();
+        let mut got = vec![0f64; n as usize];
+        c_to_f_into(&src, shape, &mut got, |v| v as f64);
+        assert_eq!(got, want, "shape {shape:?}");
+    }
+    #[test]
+    fn matches_two_step() {
+        for s in [&[7u64][..], &[1, 9], &[5, 1], &[3, 4], &[130, 70], &[64, 64], &[1, 200, 3],
+                  &[2, 3, 4], &[1, 1, 65, 129], &[3, 1, 5, 1, 7]] {
+            check(s);
+        }
+    }
 }
 
 #[cfg(test)]

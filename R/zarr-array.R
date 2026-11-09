@@ -495,19 +495,22 @@ ZarrArray <- R6::R6Class("ZarrArray",
       }
 
       # --- zarrs fast path ---
-      if (can_use_zarrs(indexer, private$store)) {
+      if (can_use_zarrs(indexer, private$store) && zarrs_dtype_ok(private$dtype)) {
         ranges <- selection_to_ranges(indexer)
         store_id <- private$store$get_store_identifier()
         ct <- getOption("pizzarr.concurrent_target", NULL)
         result <- tryCatch(
-          zarrs_get_subset(store_id, private$path, ranges, ct),
+          # a root-level array has path NA; zarrs wants "" for the root
+          zarrs_get_subset(store_id, if (is_na(private$path)) "" else private$path, ranges, ct),
           error = function(e) NULL
         )
         if (!is.null(result)) {
-          # zarrs returns flat F-order data (transposed in Rust).
-          # Reshape directly into R array with correct dims.
+          # zarrs returns flat F-order data (transposed in Rust). Set dim in
+          # place: unlike array(), dim<- does not copy the (large) vector.
           zarrs_shape <- vapply(ranges, function(r) r[2L] - r[1L], integer(1))
-          arr <- array(result$data, dim = zarrs_shape)
+          arr <- result$data
+          result <- NULL
+          dim(arr) <- zarrs_shape
           # Squeeze scalar dims (IntDimIndexer) to match out_shape.
           # Only apply when out_shape has fewer dims (length-1 dims dropped).
           os <- unlist(out_shape)
@@ -638,7 +641,7 @@ ZarrArray <- R6::R6Class("ZarrArray",
         }
 
         # --- zarrs write fast path ---
-        if (can_use_zarrs_write(indexer, private$store)) {
+        if (can_use_zarrs_write(indexer, private$store) && zarrs_dtype_ok(private$dtype)) {
           ranges <- selection_to_ranges(indexer)
           store_id <- private$store$get_store_identifier()
           ct <- getOption("pizzarr.concurrent_target", NULL)
@@ -653,7 +656,7 @@ ZarrArray <- R6::R6Class("ZarrArray",
           # Rust handles F→C transpose internally; just flatten.
           # Shape is passed via ranges so Rust knows the dimensions.
           result <- tryCatch(
-            zarrs_set_subset(store_id, private$path, ranges, write_data, ct),
+            zarrs_set_subset(store_id, if (is_na(private$path)) "" else private$path, ranges, write_data, ct),
             error = function(e) NULL
           )
           if (isTRUE(result)) return(invisible(NULL))
