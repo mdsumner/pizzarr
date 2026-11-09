@@ -18,7 +18,7 @@ gzip = ["zarrs/gzip"]
 blosc = ["zarrs/blosc"]
 zstd = ["zarrs/zstd"]
 sharding = ["zarrs/sharding"]
-full = ["http_sync", "dep:zarrs_object_store", "dep:object_store", "dep:tokio",
+full = ["http_sync", "dep:zarrs_object_store", "dep:object_store", "dep:tokio", "zarrs/zlib",
         "zarrs/zstd", "zarrs/sharding", "zarrs/crc32c", "blosc"]
 s3 = ["full", "object_store/aws"]
 gcs = ["full", "object_store/gcp"]
