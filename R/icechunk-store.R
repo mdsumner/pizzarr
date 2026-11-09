@@ -4,17 +4,17 @@
 #' @description
 #' Store backed by an Icechunk session handed over from the `icechunk`
 #' package. pizzarr never opens repositories, commits, or authorises virtual
-#' chunk containers: the `icechunk` package does that, then passes the
-#' session to pizzarr as bytes (`icechunk::ic_session_bytes()`). pizzarr
+#' chunk containers: the `icechunkr` package does that, then passes the
+#' session to pizzarr as bytes (`icechunkr::ic_session_bytes()`). pizzarr
 #' rebuilds the session inside its zarrs backend, so reads and writes run
 #' through the same Rust code paths as every other zarrs store.
 #'
 #' Writes accumulate in pizzarr's copy of the session. Hand them back with
-#' `$session_bytes()` and `icechunk::ic_session_merge()`, then commit with
-#' `icechunk::ic_commit()`.
+#' `$session_bytes()` and `icechunkr::ic_session_merge()`, then commit with
+#' `icechunkr::ic_commit()`.
 #'
 #' Requires pizzarr built with the `icechunk` Cargo feature
-#' (`PIZZARR_FEATURES=s3,gcs,icechunk`) and an `icechunk` package built
+#' (`PIZZARR_FEATURES=s3,gcs,icechunk`) and an `icechunkr` package built
 #' against the same icechunk crate version.
 #'
 #' @format [R6::R6Class] inheriting from [Store].
@@ -22,7 +22,7 @@
 #' @rdname IcechunkStore
 #' @examples
 #' \dontrun{
-#' library(icechunk)
+#' library(icechunkr)
 #' repo <- ic_repo_open(ic_storage_local("path/to/repo"))
 #' s <- ic_session_writable(repo, "main")
 #' store <- IcechunkStore$new(s)
@@ -60,9 +60,9 @@ IcechunkStore <- R6::R6Class("IcechunkStore",
   public = list(
     #' @description
     #' Create an `IcechunkStore`.
-    #' @param session An `icechunk_session` (from the `icechunk` package) or
+    #' @param session An `icechunk_session` (from the `icechunkr` package) or
     #'   session bytes (raw vector with the `ICR1` header, from
-    #'   `icechunk::ic_session_bytes()`).
+    #'   `icechunkr::ic_session_bytes()`).
     #' @param read_only Logical or `NULL`. `NULL` takes it from the session
     #'   when an `icechunk_session` is given, else assumes writable (icechunk
     #'   itself refuses writes to a read-only session).
@@ -74,13 +74,13 @@ IcechunkStore <- R6::R6Class("IcechunkStore",
              "(install with PIZZARR_FEATURES=s3,gcs,icechunk)")
       }
       if (inherits(session, "icechunk_session")) {
-        if (!requireNamespace("icechunk", quietly = TRUE)) {
-          stop("the 'icechunk' package is needed to read an icechunk_session")
+        if (!requireNamespace("icechunkr", quietly = TRUE)) {
+          stop("the 'icechunkr' package is needed to read an icechunk_session")
         }
         if (is.null(read_only)) {
-          read_only <- isTRUE(icechunk::ic_session_info(session)$read_only)
+          read_only <- isTRUE(icechunkr::ic_session_info(session)$read_only)
         }
-        session <- icechunk::ic_session_bytes(session)
+        session <- icechunkr::ic_session_bytes(session)
       }
       if (!is.raw(session)) {
         stop("session must be an icechunk_session or raw session bytes")
@@ -155,7 +155,7 @@ IcechunkStore <- R6::R6Class("IcechunkStore",
     },
     #' @description
     #' Serialise the session, including writes made through this store, for
-    #' `icechunk::ic_session_merge()`.
+    #' `icechunkr::ic_session_merge()`.
     #' @return Raw vector of class `icechunk_session_bytes`.
     session_bytes = function() {
       private$check_open()

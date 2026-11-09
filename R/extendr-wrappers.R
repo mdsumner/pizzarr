@@ -157,7 +157,7 @@ zarrs_set_subset <- function(store_url, array_path, ranges, data, concurrent_tar
 #' @export
 zarrs_create_array <- function(store_url, array_path, shape, chunks, dtype, codec_preset, fill_value, attributes_json, zarr_format) .Call(wrap__zarrs_create_array, store_url, array_path, shape, chunks, dtype, codec_preset, fill_value, attributes_json, zarr_format)
 
-#' Register an icechunk session (bytes from `icechunk::ic_session_bytes()`)
+#' Register an icechunk session (bytes from `icechunkr::ic_session_bytes()`)
 #' and return the store key to use as `store_url` with every zarrs_*
 #' function. Call `zarrs_close_store(key)` when done.
 #' @param bytes raw vector with the ICR1 header.
@@ -166,7 +166,7 @@ zarrs_create_array <- function(store_url, array_path, shape, chunks, dtype, code
 zarrs_icechunk_open_session <- function(bytes) .Call(wrap__zarrs_icechunk_open_session, bytes)
 
 #' Serialise the session behind a registered key (including any chunks
-#' pizzarr wrote) for `icechunk::ic_session_merge()`.
+#' pizzarr wrote) for `icechunkr::ic_session_merge()`.
 #' @param key store key from `zarrs_icechunk_open_session()`.
 #' @return raw vector with the ICR1 header.
 #' @export

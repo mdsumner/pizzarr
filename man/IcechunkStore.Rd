@@ -10,17 +10,17 @@
 \description{
 Store backed by an Icechunk session handed over from the \code{icechunk}
 package. pizzarr never opens repositories, commits, or authorises virtual
-chunk containers: the \code{icechunk} package does that, then passes the
-session to pizzarr as bytes (\code{icechunk::ic_session_bytes()}). pizzarr
+chunk containers: the \code{icechunkr} package does that, then passes the
+session to pizzarr as bytes (\code{icechunkr::ic_session_bytes()}). pizzarr
 rebuilds the session inside its zarrs backend, so reads and writes run
 through the same Rust code paths as every other zarrs store.
 
 Writes accumulate in pizzarr's copy of the session. Hand them back with
-\verb{$session_bytes()} and \code{icechunk::ic_session_merge()}, then commit with
-\code{icechunk::ic_commit()}.
+\verb{$session_bytes()} and \code{icechunkr::ic_session_merge()}, then commit with
+\code{icechunkr::ic_commit()}.
 
 Requires pizzarr built with the \code{icechunk} Cargo feature
-(\verb{PIZZARR_FEATURES=s3,gcs,icechunk}) and an \code{icechunk} package built
+(\verb{PIZZARR_FEATURES=s3,gcs,icechunk}) and an \code{icechunkr} package built
 against the same icechunk crate version.
 }
 \details{
@@ -28,7 +28,7 @@ IcechunkStore for Zarr
 }
 \examples{
 \dontrun{
-library(icechunk)
+library(icechunkr)
 repo <- ic_repo_open(ic_storage_local("path/to/repo"))
 s <- ic_session_writable(repo, "main")
 store <- IcechunkStore$new(s)
@@ -93,9 +93,9 @@ Other Store classes:
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{session}}{An \code{icechunk_session} (from the \code{icechunk} package) or
+      \item{\code{session}}{An \code{icechunk_session} (from the \code{icechunkr} package) or
 session bytes (raw vector with the \code{ICR1} header, from
-\code{icechunk::ic_session_bytes()}).}
+\code{icechunkr::ic_session_bytes()}).}
       \item{\code{read_only}}{Logical or \code{NULL}. \code{NULL} takes it from the session
 when an \code{icechunk_session} is given, else assumes writable (icechunk
 itself refuses writes to a read-only session).}
@@ -242,7 +242,7 @@ itself refuses writes to a read-only session).}
 \if{latex}{\out{\hypertarget{method-IcechunkStore-session_bytes}{}}}
 \subsection{\code{IcechunkStore$session_bytes()}}{
   Serialise the session, including writes made through this store, for
-\code{icechunk::ic_session_merge()}.
+\code{icechunkr::ic_session_merge()}.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{IcechunkStore$session_bytes()}

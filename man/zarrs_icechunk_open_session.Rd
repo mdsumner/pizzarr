@@ -2,7 +2,7 @@
 % Please edit documentation in R/extendr-wrappers.R
 \name{zarrs_icechunk_open_session}
 \alias{zarrs_icechunk_open_session}
-\title{Register an icechunk session (bytes from \code{icechunk::ic_session_bytes()})
+\title{Register an icechunk session (bytes from \code{icechunkr::ic_session_bytes()})
 and return the store key to use as \code{store_url} with every zarrs_*
 function. Call \code{zarrs_close_store(key)} when done.}
 \usage{
@@ -15,7 +15,7 @@ zarrs_icechunk_open_session(bytes)
 character store key, \verb{icechunk://<snapshot>/<nonce>}.
 }
 \description{
-Register an icechunk session (bytes from \code{icechunk::ic_session_bytes()})
+Register an icechunk session (bytes from \code{icechunkr::ic_session_bytes()})
 and return the store key to use as \code{store_url} with every zarrs_*
 function. Call \code{zarrs_close_store(key)} when done.
 }

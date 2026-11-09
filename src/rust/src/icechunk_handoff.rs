@@ -182,7 +182,7 @@ fn encode(payload: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Register an icechunk session (bytes from `icechunk::ic_session_bytes()`)
+/// Register an icechunk session (bytes from `icechunkr::ic_session_bytes()`)
 /// and return the store key to use as `store_url` with every zarrs_*
 /// function. Call `zarrs_close_store(key)` when done.
 /// @param bytes raw vector with the ICR1 header.
@@ -203,7 +203,7 @@ fn zarrs_icechunk_open_session(bytes: Raw) -> extendr_api::Result<String> {
 }
 
 /// Serialise the session behind a registered key (including any chunks
-/// pizzarr wrote) for `icechunk::ic_session_merge()`.
+/// pizzarr wrote) for `icechunkr::ic_session_merge()`.
 /// @param key store key from `zarrs_icechunk_open_session()`.
 /// @return raw vector with the ICR1 header.
 /// @export

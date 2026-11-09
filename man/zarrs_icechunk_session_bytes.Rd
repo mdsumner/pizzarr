@@ -3,7 +3,7 @@
 \name{zarrs_icechunk_session_bytes}
 \alias{zarrs_icechunk_session_bytes}
 \title{Serialise the session behind a registered key (including any chunks
-pizzarr wrote) for \code{icechunk::ic_session_merge()}.}
+pizzarr wrote) for \code{icechunkr::ic_session_merge()}.}
 \usage{
 zarrs_icechunk_session_bytes(key)
 }
@@ -15,5 +15,5 @@ raw vector with the ICR1 header.
 }
 \description{
 Serialise the session behind a registered key (including any chunks
-pizzarr wrote) for \code{icechunk::ic_session_merge()}.
+pizzarr wrote) for \code{icechunkr::ic_session_merge()}.
 }
