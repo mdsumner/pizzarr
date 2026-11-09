@@ -2128,7 +2128,9 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 name = "pizzarr"
 version = "0.2.2"
 dependencies = [
+ "async-trait",
  "extendr-api",
+ "futures",
  "icechunk",
  "object_store 0.13.2",
  "parking_lot",

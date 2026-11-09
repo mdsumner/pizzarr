@@ -28,6 +28,124 @@ use crate::store_cache::{self, StorageEntry};
 pub(crate) const ICECHUNK_VERSION: &str = "2.3.1";
 const MAGIC: &[u8; 4] = b"ICR1";
 
+/// Wraps [`AsyncIcechunkStore`] to fix missing-chunk handling in partial
+/// reads. zarrs_icechunk 0.6.0 maps per-range results of
+/// `get_partial_many` with `handle_result`, so a chunk that was never
+/// written (read as fill value) surfaces as `StorageError::Other` instead
+/// of `Ok(None)`. Everything else delegates.
+// TODO: report upstream (zarrs/zarrs_icechunk) and drop when fixed.
+pub(crate) struct HandoffStore {
+    inner: Arc<AsyncIcechunkStore>,
+}
+
+mod handoff_store {
+    use super::*;
+    use std::result::Result;
+    use futures::StreamExt;
+    use icechunk::store::StoreErrorKind;
+    use zarrs_storage::byte_range::{ByteRange, ByteRangeIterator};
+    use zarrs_storage::{
+        AsyncListableStorageTraits, AsyncMaybeBytesIterator, AsyncReadableStorageTraits,
+        AsyncWritableStorageTraits, Bytes, MaybeBytes, OffsetBytesIterator, StorageError,
+        StoreKey, StoreKeys, StoreKeysPrefixes, StorePrefix,
+    };
+
+    fn is_not_found(e: &icechunk::store::StoreError) -> bool {
+        matches!(e.kind(), StoreErrorKind::NotFound(_))
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncReadableStorageTraits for HandoffStore {
+        async fn get(&self, key: &StoreKey) -> Result<MaybeBytes, StorageError> {
+            self.inner.get(key).await
+        }
+
+        async fn get_partial_many<'a>(
+            &'a self,
+            key: &StoreKey,
+            byte_ranges: ByteRangeIterator<'a>,
+        ) -> Result<AsyncMaybeBytesIterator<'a>, StorageError> {
+            let ranges: Vec<_> = byte_ranges
+                .map(|r| {
+                    let r = match r {
+                        ByteRange::FromStart(o, None) => icechunk::format::ByteRange::from_offset(o),
+                        ByteRange::FromStart(o, Some(n)) => {
+                            icechunk::format::ByteRange::from_offset_with_length(o, n)
+                        }
+                        ByteRange::Suffix(n) => icechunk::format::ByteRange::Last(n),
+                    };
+                    (key.to_string(), r)
+                })
+                .collect();
+            let store = icechunk::Store::from_session(self.inner.session()).await;
+            let results = match store.get_partial_values(ranges).await {
+                Ok(r) => r,
+                Err(e) if is_not_found(&e) => return Ok(None),
+                Err(e) => return Err(StorageError::Other(e.to_string())),
+            };
+            // All ranges target one key: if it is absent, every range is NotFound.
+            if results.iter().any(|r| matches!(r, Err(e) if is_not_found(e))) {
+                return Ok(None);
+            }
+            let items: Vec<Result<Bytes, StorageError>> = results
+                .into_iter()
+                .map(|r| r.map_err(|e| StorageError::Other(e.to_string())))
+                .collect();
+            Ok(Some(futures::stream::iter(items).boxed()))
+        }
+
+        async fn size_key(&self, key: &StoreKey) -> Result<Option<u64>, StorageError> {
+            self.inner.size_key(key).await
+        }
+
+        fn supports_get_partial(&self) -> bool {
+            self.inner.supports_get_partial()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncWritableStorageTraits for HandoffStore {
+        async fn set(&self, key: &StoreKey, value: Bytes) -> Result<(), StorageError> {
+            self.inner.set(key, value).await
+        }
+        async fn set_partial_many<'a>(
+            &'a self,
+            key: &StoreKey,
+            offset_values: OffsetBytesIterator<'a>,
+        ) -> Result<(), StorageError> {
+            self.inner.set_partial_many(key, offset_values).await
+        }
+        async fn erase(&self, key: &StoreKey) -> Result<(), StorageError> {
+            self.inner.erase(key).await
+        }
+        async fn erase_prefix(&self, prefix: &StorePrefix) -> Result<(), StorageError> {
+            self.inner.erase_prefix(prefix).await
+        }
+        fn supports_set_partial(&self) -> bool {
+            self.inner.supports_set_partial()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncListableStorageTraits for HandoffStore {
+        async fn list(&self) -> Result<StoreKeys, StorageError> {
+            self.inner.list().await
+        }
+        async fn list_prefix(&self, prefix: &StorePrefix) -> Result<StoreKeys, StorageError> {
+            self.inner.list_prefix(prefix).await
+        }
+        async fn list_dir(&self, prefix: &StorePrefix) -> Result<StoreKeysPrefixes, StorageError> {
+            self.inner.list_dir(prefix).await
+        }
+        async fn size_prefix(&self, prefix: &StorePrefix) -> Result<u64, StorageError> {
+            self.inner.size_prefix(prefix).await
+        }
+        async fn size(&self) -> Result<u64, StorageError> {
+            self.inner.size().await
+        }
+    }
+}
+
 static SESSIONS: LazyLock<Mutex<HashMap<String, Arc<AsyncIcechunkStore>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static NONCE: AtomicU64 = AtomicU64::new(1);
@@ -77,7 +195,8 @@ fn zarrs_icechunk_open_session(bytes: Raw) -> extendr_api::Result<String> {
     let snap = session.snapshot_id().to_string();
     let key = format!("icechunk://{snap}/{}", NONCE.fetch_add(1, Ordering::Relaxed));
     let store = Arc::new(AsyncIcechunkStore::new(session));
-    let sync = Arc::new(AsyncToSyncStorageAdapter::new(Arc::clone(&store), crate::runtime::TokioBlockOn));
+    let wrapped = Arc::new(HandoffStore { inner: Arc::clone(&store) });
+    let sync = Arc::new(AsyncToSyncStorageAdapter::new(wrapped, crate::runtime::TokioBlockOn));
     store_cache::insert(&key, StorageEntry::ReadWriteList(sync));
     SESSIONS.lock().insert(key.clone(), store);
     Ok(key)
@@ -130,6 +249,34 @@ fn zarrs_set_key(store_url: &str, key: &str, value: Raw) -> extendr_api::Result<
     Ok(true)
 }
 
+/// Erase one key in a registered store.
+/// @param store_url store key.
+/// @param key zarr key.
+/// @export
+#[extendr]
+fn zarrs_erase_key(store_url: &str, key: &str) -> extendr_api::Result<bool> {
+    use zarrs_storage::WritableStorageTraits;
+    let store = crate::store_open::open_store(store_url)?;
+    let w = store.as_readable_writable_listable(store_url)?;
+    let k = zarrs_storage::StoreKey::new(key).map_err(|e| err(e.to_string()))?;
+    w.erase(&k).map_err(|e| err(e.to_string()))?;
+    Ok(true)
+}
+
+/// Erase every key under a prefix in a registered store.
+/// @param store_url store key.
+/// @param prefix "" for the root, else ending in "/".
+/// @export
+#[extendr]
+fn zarrs_erase_prefix(store_url: &str, prefix: &str) -> extendr_api::Result<bool> {
+    use zarrs_storage::WritableStorageTraits;
+    let store = crate::store_open::open_store(store_url)?;
+    let w = store.as_readable_writable_listable(store_url)?;
+    let p = zarrs_storage::StorePrefix::new(prefix).map_err(|e| err(e.to_string()))?;
+    w.erase_prefix(&p).map_err(|e| err(e.to_string()))?;
+    Ok(true)
+}
+
 /// List keys and prefixes one level below `prefix` in a registered store.
 /// @param store_url store key.
 /// @param prefix "" for the root, else ending in "/".
@@ -159,6 +306,8 @@ extendr_module! {
     fn zarrs_icechunk_session_bytes;
     fn zarrs_icechunk_close_session;
     fn zarrs_set_key;
+    fn zarrs_erase_key;
+    fn zarrs_erase_prefix;
     fn zarrs_list_dir;
     fn zarrs_icechunk_version;
 }

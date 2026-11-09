@@ -21,6 +21,12 @@ fn zarrs_icechunk_close_session(key: &str) -> bool { let _ = key; false }
 fn zarrs_set_key(store_url: &str, key: &str, value: Raw) -> extendr_api::Result<bool> { let _ = (store_url, key, value); Err(off()) }
 /// @export
 #[extendr]
+fn zarrs_erase_key(store_url: &str, key: &str) -> extendr_api::Result<bool> { let _ = (store_url, key); Err(off()) }
+/// @export
+#[extendr]
+fn zarrs_erase_prefix(store_url: &str, prefix: &str) -> extendr_api::Result<bool> { let _ = (store_url, prefix); Err(off()) }
+/// @export
+#[extendr]
 fn zarrs_list_dir(store_url: &str, prefix: &str) -> extendr_api::Result<List> { let _ = (store_url, prefix); Err(off()) }
 /// @export
 #[extendr]
@@ -32,6 +38,8 @@ extendr_module! {
     fn zarrs_icechunk_session_bytes;
     fn zarrs_icechunk_close_session;
     fn zarrs_set_key;
+    fn zarrs_erase_key;
+    fn zarrs_erase_prefix;
     fn zarrs_list_dir;
     fn zarrs_icechunk_version;
 }

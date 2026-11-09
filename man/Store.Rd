@@ -18,6 +18,7 @@ Other Store classes:
 \code{\link{DirectoryStore}},
 \code{\link{GcsStore}},
 \code{\link{HttpStore}},
+\code{\link{IcechunkStore}},
 \code{\link{MemoryStore}},
 \code{\link{S3Store}}
 }

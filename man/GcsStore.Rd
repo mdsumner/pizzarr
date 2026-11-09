@@ -64,6 +64,7 @@ distribution tiers. \code{vignette("remote-stores")} for worked examples.
 Other Store classes:
 \code{\link{DirectoryStore}},
 \code{\link{HttpStore}},
+\code{\link{IcechunkStore}},
 \code{\link{MemoryStore}},
 \code{\link{S3Store}},
 \code{\link{Store}}

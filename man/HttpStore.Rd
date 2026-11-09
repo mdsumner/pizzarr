@@ -43,6 +43,7 @@ store$listdir()
 Other Store classes:
 \code{\link{DirectoryStore}},
 \code{\link{GcsStore}},
+\code{\link{IcechunkStore}},
 \code{\link{MemoryStore}},
 \code{\link{S3Store}},
 \code{\link{Store}}
