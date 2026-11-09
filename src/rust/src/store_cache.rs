@@ -96,6 +96,11 @@ mod inner {
         Ok(store)
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn insert(normalized: &str, entry: StorageEntry) {
+        STORE_CACHE.write().insert(normalized.to_string(), entry);
+    }
+
     pub(crate) fn remove(normalized: &str) -> bool {
         let mut cache = STORE_CACHE.write();
         cache.remove(normalized).is_some()
@@ -186,6 +191,13 @@ where
 {
     let key = normalize_store_url(url);
     inner::get_or_insert(url, &key, factory)
+}
+
+/// Insert a store under a key (used for icechunk session handoff, where
+/// the key is synthetic and has no factory).
+#[cfg(all(feature = "icechunk", not(target_family = "wasm")))]
+pub(crate) fn insert(url: &str, entry: StorageEntry) {
+    inner::insert(&normalize_store_url(url), entry);
 }
 
 /// Remove a store from the cache.

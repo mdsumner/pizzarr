@@ -33,6 +33,11 @@ mod create;
 mod dtype_dispatch;
 mod error;
 mod http_config;
+#[cfg(feature = "icechunk")]
+mod icechunk_handoff;
+#[cfg(not(feature = "icechunk"))]
+#[path = "icechunk_stub.rs"]
+mod icechunk_handoff;
 mod info;
 mod metadata;
 mod retrieve;
@@ -92,6 +97,9 @@ pub(crate) fn compiled_features() -> Vec<String> {
 
     #[cfg(feature = "gcs")]
     features.push("gcs".into());
+
+    #[cfg(feature = "icechunk")]
+    features.push("icechunk".into());
 
     features
 }
@@ -391,6 +399,7 @@ fn store_get(
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
     mod pizzarr;
+    use icechunk_handoff;
     fn zarrs_compiled_features;
     fn zarrs_node_exists;
     fn zarrs_get_key;

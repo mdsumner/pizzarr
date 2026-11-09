@@ -41,6 +41,15 @@ pub(crate) fn open_store(url: &str) -> Result<StorageEntry, PizzarrError> {
             return open_gcs_store(trimmed);
         }
 
+        // --- Icechunk: only reachable via a registered session ---
+        if trimmed.starts_with("icechunk://") {
+            return Err(PizzarrError::StoreOpen {
+                url: url.to_string(),
+                reason: "no icechunk session registered under this key (closed, or from another process); \
+                         use zarrs_icechunk_open_session()".to_string(),
+            });
+        }
+
         // --- Azure (not yet supported) ---
         if trimmed.starts_with("az://") {
             return Err(PizzarrError::FeatureNotCompiled {
