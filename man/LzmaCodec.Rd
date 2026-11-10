@@ -20,6 +20,7 @@ Other Codec classes:
 \code{\link{Codec}},
 \code{\link{GzipCodec}},
 \code{\link{Lz4Codec}},
+\code{\link{ShuffleCodec}},
 \code{\link{VLenUtf8Codec}},
 \code{\link{ZlibCodec}},
 \code{\link{ZstdCodec}}

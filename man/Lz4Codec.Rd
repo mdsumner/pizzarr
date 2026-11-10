@@ -27,6 +27,7 @@ Other Codec classes:
 \code{\link{Codec}},
 \code{\link{GzipCodec}},
 \code{\link{LzmaCodec}},
+\code{\link{ShuffleCodec}},
 \code{\link{VLenUtf8Codec}},
 \code{\link{ZlibCodec}},
 \code{\link{ZstdCodec}}

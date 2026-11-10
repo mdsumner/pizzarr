@@ -725,6 +725,78 @@ VLenUtf8Codec <- R6::R6Class("VLenUtf8Codec",
 )
 
 #' @keywords internal
+#' Shuffle filter for Zarr
+#' @title ShuffleCodec Class
+#' @docType class
+#' @description
+#' Byte shuffle filter (numcodecs `shuffle`; Zarr v3 `numcodecs.shuffle`):
+#' groups byte k of every element together, which helps a compressor
+#' that follows it. Used by netCDF-4 / HDF5 data (shuffle + deflate), so
+#' virtual references to such files carry it. Trailing bytes that do not
+#' fill a whole element are left in place, as numcodecs does.
+#'
+#' @format [R6::R6Class] inheriting from [Codec].
+#' @family Codec classes
+#' @rdname ShuffleCodec
+#' @export
+ShuffleCodec <- R6::R6Class("ShuffleCodec",
+  inherit = Codec,
+  public = list(
+    #' @field elementsize Bytes per element.
+    elementsize = NULL,
+    #' @description
+    #' Create a new shuffle filter.
+    #' @param elementsize Bytes per element (numcodecs default 4).
+    #' @param ... Not used.
+    #' @return A new `ShuffleCodec` object.
+    initialize = function(elementsize = 4L, ...) {
+      self$elementsize <- as.integer(elementsize)
+      if (length(self$elementsize) != 1L || is.na(self$elementsize) || self$elementsize < 1L) {
+        stop("ShuffleCodec: elementsize must be a positive integer")
+      }
+      warn_if_unk_args(list(...), "ShuffleCodec")
+    },
+    #' @description
+    #' Shuffle bytes.
+    #' @param buf (`raw()`)\cr
+    #'   The un-shuffled data.
+    #' @param zarr_arr ([ZarrArray])\cr
+    #'   The ZarrArray instance.
+    #' @return Shuffled data.
+    encode = function(buf, zarr_arr) {
+      private$permute(buf, shuffle = TRUE)
+    },
+    #' @description
+    #' Unshuffle bytes.
+    #' @param buf (`raw()`)\cr
+    #'   The shuffled data.
+    #' @param zarr_arr ([ZarrArray])\cr
+    #'   The ZarrArray instance.
+    #' @return Un-shuffled data.
+    decode = function(buf, zarr_arr) {
+      private$permute(buf, shuffle = FALSE)
+    },
+    #' @description
+    #' Get codec configuration as a list.
+    #' @return A named list.
+    get_config = function() {
+      list(id = jsonlite::unbox("shuffle"), elementsize = jsonlite::unbox(self$elementsize))
+    }
+  ),
+  private = list(
+    permute = function(buf, shuffle) {
+      es <- self$elementsize
+      buf <- as.raw(buf)
+      n <- length(buf) %/% es
+      if (es == 1L || n < 2L) return(buf)
+      body <- seq_len(n * es)
+      # element-major (n x es, bytes of one element adjacent) <-> byte-major
+      m <- if (shuffle) t(matrix(buf[body], nrow = es, ncol = n)) else t(matrix(buf[body], nrow = n, ncol = es))
+      c(as.vector(m), buf[-body])
+    }
+  )
+)
+
 CODEC_CONSTRUCTORS <- list(
   lz4 = Lz4Codec,
   zstd = ZstdCodec,
@@ -733,6 +805,7 @@ CODEC_CONSTRUCTORS <- list(
   lzma = LzmaCodec,
   bz2 = Bz2Codec,
   blosc = BloscCodec,
+  shuffle = ShuffleCodec,
   `vlen-utf8` = VLenUtf8Codec
 )
 
@@ -869,7 +942,11 @@ v3_codec_to_v2_config <- function(codec_name, config) {
     "blosc" = "blosc",
     "zlib"  = "zlib",
     "bz2"   = "bz2",
-    "lzma"  = "lzma"
+    "lzma"  = "lzma",
+    # numcodecs codecs under their zarr-python v3 names (netCDF-4 / HDF5
+    # shuffle + deflate, as virtual references to those files carry them)
+    "numcodecs.zlib"    = "zlib",
+    "numcodecs.shuffle" = "shuffle"
   )
 
   v2_id <- V3_TO_V2_ID[[codec_name]]
@@ -923,7 +1000,8 @@ v2_config_to_v3_codec <- function(config, dtype = NULL) {
     "blosc" = "blosc",
     "zlib"  = "zlib",
     "bz2"   = "bz2",
-    "lzma"  = "lzma"
+    "lzma"  = "lzma",
+    "shuffle" = "numcodecs.shuffle"
   )
 
   v3_name <- V2_TO_V3_NAME[[codec_id]]
